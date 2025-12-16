@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
-[**Try it Now**](https://yoursite.com) · [Report Bug](https://github.com/yourname/codeflow/issues) · [Request Feature](https://github.com/yourname/codeflow/issues)
+[**Try it Now**](https://codeflow-five.vercel.app/) · [Report Bug](https://github.com/braedonsaunders/codeflow/issues) · [Request Feature](https://github.com/braedonsaunders/codeflow/issues)
 
 <img src="https://via.placeholder.com/800x450?text=CodeFlow+Screenshot" alt="CodeFlow Screenshot" width="100%"/>
 
@@ -70,9 +70,6 @@ Color files by commit frequency to see which parts of your codebase are most act
 ### 📋 **PR Impact Analysis**
 Paste a PR URL to see exactly which files it affects and calculate the blast radius of proposed changes.
 
-### 🎓 **Guided Tours**
-Create shareable walkthroughs of your codebase. Perfect for onboarding new team members.
-
 ---
 
 ## Privacy First
@@ -92,12 +89,12 @@ Your GitHub token (if used) is only stored in your browser's memory and is clear
 ## Quick Start
 
 ### Option 1: Use Online (Recommended)
-Just visit [codeflow.dev](https://yoursite.com) and paste any GitHub URL.
+Just visit [CodeFlow](https://codeflow-five.vercel.app/) and paste any GitHub URL.
 
 ### Option 2: Self-Host
 ```bash
 # Clone the repo
-git clone https://github.com/yourname/codeflow.git
+git clone https://github.com/braedonsaunders/codeflow.git
 
 # That's it! Just open index.html in your browser
 open index.html
