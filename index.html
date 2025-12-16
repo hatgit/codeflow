@@ -344,6 +344,18 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg0);color:var(--t0
 .pr-hotspot{display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:6px;margin-bottom:6px}
 .pr-hotspot-bar{flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
 .pr-hotspot-fill{height:100%;border-radius:3px}
+.conn-item{border-bottom:1px solid var(--border2)}
+.conn-item:last-child{border-bottom:none}
+.conn-header{display:flex;align-items:center;gap:6px;padding:8px 12px;cursor:pointer;transition:background 0.15s}
+.conn-header:hover{background:var(--bg2)}
+.conn-file-icon{font-size:12px}
+.conn-file-name{font-size:10px;font-weight:500;color:var(--t1)}
+.conn-fns{padding:6px 12px 10px 28px;background:var(--bg2);border-top:1px solid var(--border2)}
+.conn-fn{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;margin:2px 0;background:var(--bg1);border-radius:4px;font-size:9px}
+.conn-fn-name{color:var(--acc);font-family:'JetBrains Mono',monospace}
+.conn-fn-count{color:var(--t3);font-size:8px}
+.conn-goto{margin-top:8px;padding:6px 10px;background:var(--accbg);color:var(--acc);border-radius:4px;font-size:9px;font-weight:600;cursor:pointer;text-align:center;transition:all 0.15s}
+.conn-goto:hover{background:var(--acc);color:var(--bg0)}
     </style>
 </head>
 <body>
@@ -355,8 +367,13 @@ const LAYER_COLORS={ui:'#4d9fff',components:'#22d3ee',services:'#a78bfa',utils:'
 const IGNORE=new Set(['node_modules','.git','vendor','dist','build','__pycache__','.next','coverage']);
 
 const Parser={
-    exts:['.js','.jsx','.ts','.tsx','.py','.java','.go','.rb','.php','.vue','.svelte'],
-    isCode:function(n){return Parser.exts.some(function(e){return n.toLowerCase().endsWith(e);});},
+    codeExts:['.js','.jsx','.ts','.tsx','.mjs','.cjs','.py','.java','.go','.rb','.php','.vue','.svelte','.rs','.c','.cpp','.cc','.h','.hpp','.cs','.swift','.kt','.kts','.scala','.clj','.ex','.exs','.erl','.hs','.lua','.r','.R','.jl','.dart','.elm','.fs','.fsx','.ml','.pl','.pm','.sh','.bash','.zsh','.fish','.ps1','.psm1','.groovy','.gradle'],
+    textExts:['.md','.txt','.json','.yaml','.yml','.toml','.xml','.html','.htm','.css','.scss','.sass','.less','.svg','.graphql','.gql','.sql','.prisma','.proto','.tf','.tfvars','.dockerfile','.env','.env.example','.gitignore','.eslintrc','.prettierrc','.babelrc','.editorconfig','.ini','.cfg','.conf','.properties','.lock','.csv','.rst','.tex','.makefile','.cmake','.rake'],
+    binExts:['.png','.jpg','.jpeg','.gif','.ico','.webp','.bmp','.svg','.woff','.woff2','.ttf','.eot','.otf','.pdf','.zip','.tar','.gz','.rar','.7z','.exe','.dll','.so','.dylib','.bin','.dat','.db','.sqlite','.mp3','.mp4','.wav','.avi','.mov','.webm'],
+    isCode:function(n){return Parser.codeExts.some(function(e){return n.toLowerCase().endsWith(e);});},
+    isText:function(n){return Parser.textExts.some(function(e){return n.toLowerCase().endsWith(e);});},
+    isBinary:function(n){return Parser.binExts.some(function(e){return n.toLowerCase().endsWith(e);});},
+    isIncluded:function(n){return !Parser.isBinary(n);},
     detectLayer:function(p){
         var l=p.toLowerCase();
         if(l.includes('/ui/')||l.includes('/views/')||l.includes('/pages/'))return'ui';
@@ -502,7 +519,7 @@ var GitHub={
             var f=[];
             var promises=[];
             c.forEach(function(i){
-                if(i.type==='file'&&Parser.isCode(i.name))f.push({path:i.path,name:i.name,folder:i.path.includes('/')?i.path.substring(0,i.path.lastIndexOf('/')):'root',size:i.size});
+                if(i.type==='file'&&Parser.isIncluded(i.name))f.push({path:i.path,name:i.name,folder:i.path.includes('/')?i.path.substring(0,i.path.lastIndexOf('/')):'root',size:i.size,isCode:Parser.isCode(i.name)});
                 else if(i.type==='dir'&&!IGNORE.has(i.name)){if(cb)cb('/'+i.path);promises.push(self.scan(o,r,cb,i.path,d+1).catch(function(){return[];}));}
             });
             return Promise.all(promises).then(function(results){
@@ -778,8 +795,8 @@ function App(){
 
         GitHub.scan(p.owner,p.repo,setProgress).then(function(files){
             if(!files.length)throw new Error('No code files found');
-            var max=Math.min(files.length,100);
-            if(files.length>100)showNotification('Found '+files.length+' files. Analyzing first 100.','warning');
+            var max=Math.min(files.length,200);
+            if(files.length>200)showNotification('Found '+files.length+' files. Analyzing first 200.','warning');
             var analyzed=[];
             var allFns=[];
 
@@ -787,20 +804,33 @@ function App(){
                 if(i>=max){finishAnalysis();return;}
                 var f=files[i];
                 setProgress('Analyzing '+(i+1)+'/'+max+': '+f.name);
-                Promise.all([
-                    GitHub.getFile(p.owner,p.repo,f.path),
-                    GitHub.getCommits(p.owner,p.repo,f.path,10).catch(function(){return[];})
-                ]).then(function(results){
-                    var content=results[0];
-                    var commits=results[1];
-                    if(content){
-                        var fns=Parser.extract(content,f.path);
+                var isCodeFile=f.isCode!==false&&Parser.isCode(f.name);
+                if(isCodeFile){
+                    Promise.all([
+                        GitHub.getFile(p.owner,p.repo,f.path),
+                        GitHub.getCommits(p.owner,p.repo,f.path,10).catch(function(){return[];})
+                    ]).then(function(results){
+                        var content=results[0];
+                        var commits=results[1];
+                        if(content){
+                            var fns=Parser.extract(content,f.path);
+                            var layer=Parser.detectLayer(f.path);
+                            analyzed.push({path:f.path,name:f.name,folder:f.folder,content:content,functions:fns,lines:content.split('\n').length,layer:layer,churn:Array.isArray(commits)?commits.length:0,isCode:true});
+                            fns.forEach(function(fn){allFns.push(Object.assign({},fn,{folder:f.folder,layer:layer}));});
+                        }
+                        processFile(i+1);
+                    }).catch(function(){processFile(i+1);});
+                }else{
+                    GitHub.getFile(p.owner,p.repo,f.path).then(function(content){
                         var layer=Parser.detectLayer(f.path);
-                        analyzed.push({path:f.path,name:f.name,folder:f.folder,content:content,functions:fns,lines:content.split('\n').length,layer:layer,churn:Array.isArray(commits)?commits.length:0});
-                        fns.forEach(function(fn){allFns.push(Object.assign({},fn,{folder:f.folder,layer:layer}));});
-                    }
-                    processFile(i+1);
-                }).catch(function(){processFile(i+1);});
+                        var lines=content?content.split('\n').length:0;
+                        analyzed.push({path:f.path,name:f.name,folder:f.folder,content:content||'',functions:[],lines:lines,layer:layer,churn:0,isCode:false});
+                        processFile(i+1);
+                    }).catch(function(){
+                        analyzed.push({path:f.path,name:f.name,folder:f.folder,content:'',functions:[],lines:0,layer:Parser.detectLayer(f.path),churn:0,isCode:false});
+                        processFile(i+1);
+                    });
+                }
             }
 
             function finishAnalysis(){
@@ -1736,6 +1766,74 @@ function App(){
                                     )
                                 )
                             ),
+                            (function(){
+                                var outgoing=[],incoming=[];
+                                var connByFile={out:{},in:{}};
+                                data.connections.forEach(function(c){
+                                    var src=typeof c.source==='object'?c.source.id:c.source;
+                                    var tgt=typeof c.target==='object'?c.target.id:c.target;
+                                    if(src===selected.path){
+                                        if(!connByFile.out[tgt])connByFile.out[tgt]={file:tgt,fns:[]};
+                                        connByFile.out[tgt].fns.push({name:c.fn,count:c.count});
+                                    }
+                                    if(tgt===selected.path){
+                                        if(!connByFile.in[src])connByFile.in[src]={file:src,fns:[]};
+                                        connByFile.in[src].fns.push({name:c.fn,count:c.count});
+                                    }
+                                });
+                                outgoing=Object.values(connByFile.out).sort(function(a,b){return b.fns.length-a.fns.length;});
+                                incoming=Object.values(connByFile.in).sort(function(a,b){return b.fns.length-a.fns.length;});
+                                var totalConns=outgoing.length+incoming.length;
+                                return totalConns>0&&React.createElement('div',{className:'card',style:{marginBottom:12}},
+                                    React.createElement('div',{className:'card-header',onClick:function(){toggleCard('conns');}},React.createElement('div',{className:'card-title'},React.createElement('span',{className:'card-toggle'+(expandedCards.has('conns')?' open':'')},'▶'),'🔗 Connections'),React.createElement('span',{className:'badge badge-default'},totalConns)),
+                                    expandedCards.has('conns')&&React.createElement('div',{className:'card-body',style:{padding:0}},
+                                        outgoing.length>0&&React.createElement(React.Fragment,null,
+                                            React.createElement('div',{style:{fontSize:9,fontWeight:600,color:'var(--t3)',padding:'8px 12px',background:'var(--bg2)',borderBottom:'1px solid var(--border)'}},'⬆️ Uses (',outgoing.length,' files)'),
+                                            outgoing.slice(0,15).map(function(conn){
+                                                var isOpen=expandedCards.has('conn-out-'+conn.file);
+                                                return React.createElement('div',{key:conn.file,className:'conn-item'},
+                                                    React.createElement('div',{className:'conn-header',onClick:function(e){e.stopPropagation();toggleCard('conn-out-'+conn.file);}},
+                                                        React.createElement('span',{className:'card-toggle'+(isOpen?' open':''),style:{fontSize:8,marginRight:6}},'▶'),
+                                                        React.createElement('span',{className:'conn-file-icon'},'📄'),
+                                                        React.createElement('span',{className:'conn-file-name'},conn.file.split('/').pop()),
+                                                        React.createElement('span',{className:'badge badge-default',style:{marginLeft:'auto'}},conn.fns.length,' fn',conn.fns.length!==1?'s':'')
+                                                    ),
+                                                    isOpen&&React.createElement('div',{className:'conn-fns'},
+                                                        conn.fns.map(function(fn,i){return React.createElement('div',{key:i,className:'conn-fn'},
+                                                            React.createElement('span',{className:'conn-fn-name'},fn.name,'()'),
+                                                            React.createElement('span',{className:'conn-fn-count'},fn.count,'×')
+                                                        );}),
+                                                        React.createElement('div',{className:'conn-goto',onClick:function(){selectFile(conn.file);}},'→ View ',conn.file.split('/').pop())
+                                                    )
+                                                );
+                                            }),
+                                            outgoing.length>15&&React.createElement('div',{style:{fontSize:9,color:'var(--t3)',padding:8,textAlign:'center'}},'+',outgoing.length-15,' more files')
+                                        ),
+                                        incoming.length>0&&React.createElement(React.Fragment,null,
+                                            React.createElement('div',{style:{fontSize:9,fontWeight:600,color:'var(--t3)',padding:'8px 12px',background:'var(--bg2)',borderBottom:'1px solid var(--border)',borderTop:outgoing.length>0?'1px solid var(--border)':'none'}},'⬇️ Used by (',incoming.length,' files)'),
+                                            incoming.slice(0,15).map(function(conn){
+                                                var isOpen=expandedCards.has('conn-in-'+conn.file);
+                                                return React.createElement('div',{key:conn.file,className:'conn-item'},
+                                                    React.createElement('div',{className:'conn-header',onClick:function(e){e.stopPropagation();toggleCard('conn-in-'+conn.file);}},
+                                                        React.createElement('span',{className:'card-toggle'+(isOpen?' open':''),style:{fontSize:8,marginRight:6}},'▶'),
+                                                        React.createElement('span',{className:'conn-file-icon'},'📄'),
+                                                        React.createElement('span',{className:'conn-file-name'},conn.file.split('/').pop()),
+                                                        React.createElement('span',{className:'badge badge-default',style:{marginLeft:'auto'}},conn.fns.length,' fn',conn.fns.length!==1?'s':'')
+                                                    ),
+                                                    isOpen&&React.createElement('div',{className:'conn-fns'},
+                                                        conn.fns.map(function(fn,i){return React.createElement('div',{key:i,className:'conn-fn'},
+                                                            React.createElement('span',{className:'conn-fn-name'},fn.name,'()'),
+                                                            React.createElement('span',{className:'conn-fn-count'},fn.count,'×')
+                                                        );}),
+                                                        React.createElement('div',{className:'conn-goto',onClick:function(){selectFile(conn.file);}},'→ View ',conn.file.split('/').pop())
+                                                    )
+                                                );
+                                            }),
+                                            incoming.length>15&&React.createElement('div',{style:{fontSize:9,color:'var(--t3)',padding:8,textAlign:'center'}},'+',incoming.length-15,' more files')
+                                        )
+                                    )
+                                );
+                            })(),
                             React.createElement('div',{className:'card',style:{marginBottom:12}},
                                 React.createElement('div',{className:'card-header',onClick:function(){toggleCard('own');}},React.createElement('div',{className:'card-title'},React.createElement('span',{className:'card-toggle'+(expandedCards.has('own')?' open':'')},'▶'),'👥 Ownership')),
                                 expandedCards.has('own')&&React.createElement('div',{className:'card-body'},
